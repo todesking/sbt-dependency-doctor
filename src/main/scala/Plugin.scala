@@ -19,7 +19,7 @@ object Plugin extends sbt.AutoPlugin {
   override val projectSettings = Seq(
     entityConflicts := {
       val cps = (Keys.dependencyClasspath in Compile).value
-      val conflicts = build(cps.map(_.data))
+      val conflicts = buildConflicts(cps.map(_.data))
 
       conflicts.foreach {conflict:ConflictEntry =>
         println(s"Conflict: ${conflict.entry.name}")
@@ -30,7 +30,7 @@ object Plugin extends sbt.AutoPlugin {
     }
   )
 
-  def build(jars:Seq[File]):Seq[ConflictEntry] = {
+  def buildConflicts(jars:Seq[File]):Seq[ConflictEntry] = {
     import java.util.{jar => java}
     import scala.collection.JavaConverters._
 
