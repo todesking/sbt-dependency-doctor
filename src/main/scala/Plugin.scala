@@ -2,6 +2,8 @@ package com.todesking.sbt_dependency_doctor
 
 import java.io.File
 
+import net.virtualvoid.sbt.graph
+
 case class JarPath(asFile:java.io.File)
 case class JarEntry(name:String)
 case class ConflictEntry(entry:JarEntry, jars:Seq[JarPath])
@@ -11,14 +13,18 @@ object Plugin extends sbt.AutoPlugin {
 
   object autoImport {
     val entityConflicts = taskKey[Unit]("show conflict entries in classpath")
+    val versionConflicts = taskKey[Unit]("show conflict versions")
   }
   import autoImport._
 
   override def trigger = allRequirements
 
-  override val projectSettings = Seq(
+  override val projectSettings =
+    graph.Plugin.graphSettings ++ forConfig(Compile)
+
+  def forConfig(config:Configuration):Seq[sbt.Def.Setting[_]] = inConfig(config)(seq(
     entityConflicts := {
-      val cps = (Keys.dependencyClasspath in Compile).value
+      val cps = (Keys.dependencyClasspath in config).value
       val conflicts = buildConflicts(cps.map(_.data))
 
       conflicts.foreach {conflict:ConflictEntry =>
@@ -27,8 +33,25 @@ object Plugin extends sbt.AutoPlugin {
           println(s"    ${jar.asFile}")
         }
       }
+    },
+    versionConflicts := {
+      val g = (graph.Plugin.moduleGraph in config).value
+
+      val dups:Map[(String, String), Seq[(String, String)]] =
+        g.nodes
+          .filter(!_.evictedByVersion.isEmpty)
+          .groupBy(m => (m.id.organisation, m.id.name))
+          .map(_ match { case ((org, name), modules) =>
+            (org, name) -> modules.map(m => (m.id.version, m.evictedByVersion.get)).toSeq})
+
+      dups.foreach(_ match { case((org, name), versions) =>
+        println(s"Conflict versions: ${org}:${name}")
+        versions.foreach { case (ver, evictedBy) =>
+          println(s"  ${ver} -> ${evictedBy}")
+        }
+      })
     }
-  )
+  ))
 
   def buildConflicts(jars:Seq[File]):Seq[ConflictEntry] = {
     import java.util.{jar => java}
