@@ -37,12 +37,14 @@ object Plugin extends sbt.AutoPlugin {
     versionConflicts := {
       val g = (graph.Plugin.moduleGraph in config).value
 
-      val dups:Map[(String, String), Seq[(String, String)]] =
+      val dups:Seq[((String, String), Seq[(String, String)])] =
         g.nodes
           .filter(!_.evictedByVersion.isEmpty)
           .groupBy(m => (m.id.organisation, m.id.name))
           .map(_ match { case ((org, name), modules) =>
             (org, name) -> modules.map(m => (m.id.version, m.evictedByVersion.get)).toSeq})
+          .toSeq
+          .sortBy { case ((org, name), _) => (org, name) }
 
       dups.foreach(_ match { case((org, name), versions) =>
         println(s"Conflict versions: ${org}:${name}")
